@@ -28,6 +28,8 @@ export interface NodePoint {
   fh: number
   /** Containment radius, used for hit tests rather than for framing. */
   fit: number
+  /** Direct child count, which decides how much air the frame needs. */
+  kids: number
 }
 
 const RING = [0, 210, 400, 560]
@@ -54,6 +56,7 @@ function layoutCluster(root: AtlasNode, scale: number): Map<string, NodePoint> {
     fw: 0,
     fh: 0,
     fit: 0,
+    kids: root.childIds.length,
   })
 
   const place = (node: AtlasNode, centreAngle: number, span: number) => {
@@ -82,6 +85,7 @@ function layoutCluster(root: AtlasNode, scale: number): Map<string, NodePoint> {
         fw: 0,
         fh: 0,
         fit: 0,
+        kids: kid.childIds.length,
       })
       place(kid, angle, wedge)
     }
@@ -129,12 +133,10 @@ function buildLayout(): Map<string, NodePoint> {
   for (const node of ATLAS.all) {
     const self = out.get(node.id)
     if (!self) continue
-    // Frame the children, not the node. In a radial layout a subtree is a long
-    // strip pointing away from its parent, so including the parent dot drags
-    // the view back down the spoke and fills half the screen with the gap.
-    const members = (ATLAS.subtree.get(node.id) ?? []).filter(
-      (id) => node.childIds.length === 0 || id !== node.id,
-    )
+    // Frame the node and its direct children, nothing deeper. The map only ever
+    // draws one level below the focus, so framing the whole subtree would zoom
+    // out to fit rows that are not on screen.
+    const members = [node.id, ...node.childIds]
     let minX = Infinity
     let maxX = -Infinity
     let minY = Infinity
@@ -196,12 +198,16 @@ export function pointFor(id: string): NodePoint | undefined {
 }
 
 /**
- * Half-height the camera needs to frame this node's subtree at a given aspect.
- * Framing on a bounding circle wastes most of the screen on a tall or wide
- * cluster, which is what makes a zoomed-in level look mostly empty.
+ * Half-height the camera needs to frame a node's children at a given aspect.
+ *
+ * Padding scales with how many children there are. Label size is fixed in screen
+ * pixels, so framing tightly on the bounding box of two labels throws them into
+ * opposite corners with nothing in between: the fewer things there are to show,
+ * the further out the camera has to sit for them to read as a group.
  */
 export function frameHeight(point: NodePoint, aspect: number): number {
-  return Math.max(point.fh, point.fw / Math.max(aspect, 0.2)) * 1.22
+  const pad = Math.min(2.6, 1.35 + 2.2 / Math.max(point.kids, 1))
+  return Math.max(point.fh, point.fw / Math.max(aspect, 0.2)) * pad
 }
 
 // Development affordance: the layout is the thing you always want to poke at

@@ -241,25 +241,36 @@ export function AtlasMap() {
       if (point) out.push({ node, point, relDepth })
     }
 
-    // Detail inside what you are looking at.
-    const inFocus = new Set<string>()
-    const walk = (node: AtlasNode, relDepth: number) => {
-      inFocus.add(node.id)
-      push(node, relDepth)
-      if (relDepth >= 2) return
-      for (const childId of node.childIds) walk(ATLAS.nodes.get(childId)!, relDepth + 1)
+    // One level at a time. Drawing a node's children and grandchildren together
+    // interleaves two ranks with nothing to tell them apart, which makes the
+    // whole question "is this inside that?" unanswerable. Entering a group shows
+    // exactly what is in it.
+    const shown = new Set<string>()
+    if (focusNode) {
+      push(focusNode, 0)
+      shown.add(focusNode.id)
+      for (const childId of focusNode.childIds) {
+        push(ATLAS.nodes.get(childId)!, 1)
+        shown.add(childId)
+      }
+    } else {
+      for (const root of ATLAS.roots) {
+        push(root, 1)
+        shown.add(root.id)
+      }
     }
-    if (focusNode) walk(focusNode, 0)
-    else for (const root of ATLAS.roots) walk(root, 0)
 
-    // Context everywhere else. Going into one cluster must not delete the rest
-    // of the map: the neighbours stay, dimmed, with their shape intact, so you
-    // can see what you are next to and scroll straight back out into it.
-    const contextLevel = focusNode ? Math.min(focusNode.level + 1, 3) : 2
-    for (const node of ATLAS.all) {
-      if (inFocus.has(node.id)) continue
-      if (node.level > contextLevel) continue
-      push(node, -1)
+    // Siblings and the wider world stay as dim context so the map does not
+    // vanish around you. Ancestors do not: the level you came through is named
+    // in the breadcrumb, and repeating it on the map is what made a parent look
+    // like one more option next to its own children.
+    if (focusNode) {
+      const ancestorIds = new Set(ancestors(focusNode.id).map((a) => a.id))
+      for (const node of ATLAS.all) {
+        if (shown.has(node.id) || ancestorIds.has(node.id)) continue
+        if (node.level > focusNode.level) continue
+        push(node, -1)
+      }
     }
     return out
   }, [focusNode])
@@ -292,17 +303,10 @@ export function AtlasMap() {
     const items: Label[] = []
     for (const { node, point, relDepth } of drawn) {
       let tier: 0 | 1 | 2
-      if (focusNode) {
-        if (relDepth === 1) tier = 0
-        else if (relDepth === 2) tier = 1
-        else if (relDepth < 0) tier = 2
-        else continue
-      } else {
-        if (node.level === 0) tier = 0
-        else if (node.level === 1) tier = 1
-        else continue
-      }
-      const font = tier === 0 ? FONT[node.level] : tier === 1 ? 10.5 : 9.5
+      if (relDepth === 1) tier = 0
+      else if (relDepth < 0) tier = 2
+      else continue
+      const font = tier === 0 ? FONT[node.level] : 10
       // Domain names sit on their hub. The hubs are what the packing spaced
       // apart, so that is the one place a title is guaranteed room; pushing it
       // to the top of the cluster walks it straight into the neighbour above.
@@ -315,7 +319,7 @@ export function AtlasMap() {
         font,
         lines: wrapLabel(node.title, node.level === 0 ? 14 : tier === 0 ? 24 : 20),
         sub:
-          tier === 0 && node.level > 0
+          tier === 0
             ? `${node.leafCount} · gap ${node.gap.toFixed(2)}` +
               (node.ourHours > 0 ? ` · ${Math.round(node.ourHours)}h` : '') +
               (node.facets.partner !== 'none' ? ' · partner' : '') +
