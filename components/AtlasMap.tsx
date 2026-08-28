@@ -52,8 +52,13 @@ interface Label {
   x: number
   y: number
   font: number
+  /** 0..1 magnitude among the siblings on screen. Drives size and weight. */
+  weight: number
   lines: string[]
   sub: string | null
+  /** Measured box in world units, used as the click and hover target. */
+  w: number
+  h: number
 }
 
 function wrapLabel(title: string, maxChars: number): string[] {
@@ -123,6 +128,7 @@ function placeLabels(items: Label[], upp: number): Label[] {
     const perChar = item.node.level === 0 ? 0.68 : 0.55
     const w = upp * widest * item.font * perChar + upp * 10
     const h = upp * ((item.lines.length + (item.sub ? 0.9 : 0)) * item.font * 1.2 + 10)
+    const box = { w, h }
     let placed = false
     // Search outward in a small spiral rather than straight up and down: two
     // long domain names side by side can only be separated sideways.
@@ -150,13 +156,13 @@ function placeLabels(items: Label[], upp: number): Label[] {
       const y1 = y + h / 2
       if (collides(x0, x1, y0, y1)) continue
       insert(x0, x1, y0, y1)
-      out.push({ ...item, x, y })
+      out.push({ ...item, x, y, ...box })
       placed = true
       break
     }
     // Tier 0 is the level the user is actually choosing between, so it is drawn
     // even if it has to sit tight against a neighbour.
-    if (!placed && item.tier === 0) out.push(item)
+    if (!placed && item.tier === 0) out.push({ ...item, ...box })
   }
   return out
 }
@@ -296,24 +302,37 @@ export function AtlasMap() {
     filters.collectors.length > 0 ||
     filters.failOnly
 
-  // The map is made of words. Tier decides size and weight; placement decides
-  // whether a word survives at this zoom at all.
+  // The map is made of words, so the words have to carry the magnitudes. A
+  // label's size is how much is in that field and how open it is: activities
+  // underneath it, weighted by gap. Sizes are normalised against the siblings
+  // actually on screen, so the contrast stays readable at every level instead of
+  // collapsing once you are three levels deep and everything is small.
   const labels = useMemo(() => {
-    const FONT = [15, 13, 11.5, 10.5]
+    const BASE = [15, 13.5, 12.5, 12]
+    const magnitude = (node: AtlasNode) =>
+      Math.sqrt(Math.max(1, node.leafCount)) * (0.45 + Math.min(1, node.gap))
+
+    const primary = drawn.filter((d) => d.relDepth === 1)
+    const mags = primary.map((d) => magnitude(d.node))
+    const lo = mags.length ? Math.min(...mags) : 0
+    const hi = mags.length ? Math.max(...mags) : 1
+    const span = hi - lo || 1
+
     const items: Label[] = []
     for (const { node, point, relDepth } of drawn) {
       let tier: 0 | 1 | 2
       if (relDepth === 1) tier = 0
       else if (relDepth < 0) tier = 2
       else continue
-      const font = tier === 0 ? FONT[node.level] : 10
-      // Domain names sit on their hub. The hubs are what the packing spaced
-      // apart, so that is the one place a title is guaranteed room; pushing it
-      // to the top of the cluster walks it straight into the neighbour above.
+
+      const norm = tier === 0 ? (magnitude(node) - lo) / span : 0
+      const font = tier === 0 ? BASE[node.level] * (0.74 + norm * 0.78) : 10
+
       items.push({
         id: node.id,
         node,
         tier,
+        weight: norm,
         x: point.x,
         y: point.y,
         font,
@@ -325,12 +344,15 @@ export function AtlasMap() {
               (node.facets.partner !== 'none' ? ' · partner' : '') +
               (node.facets.capital === 'capex' ? ' · capex' : '')
             : null,
+        w: 0,
+        h: 0,
       })
     }
-    items.sort((a, b) => a.tier - b.tier || b.node.gap - a.node.gap)
+    // Place the heaviest first: if anything has to be nudged, it should be the
+    // thing that matters least.
+    items.sort((a, b) => a.tier - b.tier || b.weight - a.weight)
     return placeLabels(items, upp)
-  }, [drawn, upp, focusNode])
-
+  }, [drawn, upp])
 
   // ---- interaction --------------------------------------------------------
   const focusRef = useRef(focusId)
@@ -362,7 +384,9 @@ export function AtlasMap() {
       // Normalise line and page scroll modes so a wheel and a trackpad travel a
       // comparable distance per gesture.
       const raw = e.deltaMode === 1 ? e.deltaY * 18 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
-      const factor = Math.exp(Math.max(-150, Math.min(150, raw)) * 0.0065)
+      // Roughly two notches per level from a standing start. Anything slower and
+      // going three levels deep is a chore rather than a gesture.
+      const factor = Math.exp(Math.max(-150, Math.min(150, raw)) * 0.0105)
       const zoomingIn = factor < 1
 
       // Floor the zoom against the current context: once a group fills the
@@ -402,7 +426,7 @@ export function AtlasMap() {
       const current = currentId ? getNode(currentId) : null
       if (current) {
         const self = LAYOUT.get(current.id)
-        if (self && h > frameHeight(self, aspectRef.current) * 1.8) {
+        if (self && h > frameHeight(self, aspectRef.current) * 1.9) {
           wheelFocusRef.current = true
           focusRef.current = current.parentId
           setFocus(current.parentId)
@@ -410,7 +434,9 @@ export function AtlasMap() {
         }
       }
       const entering = zoomingIn ? nearestGroup(cx, cy) : null
-      if (entering && h < frameHeight(entering.point, aspectRef.current) * 1.06) {
+      // Enter as soon as the group is comfortably framed, rather than waiting
+      // for it to fill the screen edge to edge.
+      if (entering && h < frameHeight(entering.point, aspectRef.current) * 1.5) {
         wheelFocusRef.current = true
         focusRef.current = entering.node.id
         setFocus(entering.node.id)
@@ -434,6 +460,10 @@ export function AtlasMap() {
   )
 
   const dragState = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null)
+  // How far the pointer travelled during the current press. A click fires after
+  // pointerup, so testing React state here would read whatever the last render
+  // saw; a ref is the only thing that is up to date at the moment it matters.
+  const dragDist = useRef(0)
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
@@ -442,6 +472,7 @@ export function AtlasMap() {
       setLasso({ x0: p.x, y0: p.y, x1: p.x, y1: p.y })
       return
     }
+    dragDist.current = 0
     dragState.current = { x: e.clientX, y: e.clientY, cx: camera.cx, cy: camera.cy }
   }
 
@@ -455,7 +486,11 @@ export function AtlasMap() {
     if (!d) return
     const rect = svgRef.current!.getBoundingClientRect()
     const scale = (camera.h * 2) / rect.height
-    if (!panning && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 3) setPanning(true)
+    dragDist.current = Math.hypot(e.clientX - d.x, e.clientY - d.y)
+    // Only start panning past a real threshold. A few pixels of wobble between
+    // press and release is a click, not a drag.
+    if (!panning && dragDist.current > 5) setPanning(true)
+    if (dragDist.current <= 5) return
     if (animRef.current) cancelAnimationFrame(animRef.current)
     const next = {
       ...camera,
@@ -482,8 +517,7 @@ export function AtlasMap() {
       setLasso(null)
     }
     dragState.current = null
-    // Let the click that follows this release read a settled panning flag.
-    requestAnimationFrame(() => setPanning(false))
+    setPanning(false)
   }
 
   useEffect(() => {
@@ -507,10 +541,15 @@ export function AtlasMap() {
     return () => window.removeEventListener('keydown', onKey)
   }, [focusId, selectedId, setFocus, lassoIds.length])
 
-  const enter = (node: AtlasNode, relDepth: number) => {
-    if (panning || relDepth < 0) return
+  /**
+   * Clicking a label is the same gesture as scrolling into it. Context labels
+   * count too: seeing a neighbouring domain and not being able to click it is
+   * worse than not drawing it at all.
+   */
+  const enter = (node: AtlasNode) => {
+    if (dragDist.current > 5) return
     setSelected(node.id)
-    if (node.childIds.length > 0 && relDepth >= 1) setFocus(node.id)
+    setFocus(node.childIds.length > 0 ? node.id : node.parentId)
   }
 
   const activeMode = HIGHLIGHT_MODES.find((m) => m.id === highlight)!
@@ -564,6 +603,7 @@ export function AtlasMap() {
             const style = nodeStyle(node, highlight, playerHit)
             const selected = selectedId === node.id
             const inLasso = lassoIds.includes(node.id)
+            const hovered = hover?.node.id === node.id
 
             let fill: string
             if (selected) fill = '#ffffff'
@@ -574,7 +614,12 @@ export function AtlasMap() {
             // Emphasis is carried by hue and weight, not by fading text out.
             // Every label that is drawn stays legible; only filtered-out ones
             // are allowed to recede.
-            const weight = node.level === 0 ? 650 : style.emphasis >= 0.85 ? 600 : tier === 0 ? 500 : 400
+            const fontWeight =
+              node.level === 0
+                ? 650
+                : tier === 0
+                  ? 420 + Math.round(label.weight * 180) + (style.emphasis >= 0.85 ? 40 : 0)
+                  : 400
             let opacity = (tier === 0 ? 1 : tier === 1 ? 0.94 : 0.76) * (0.88 + style.emphasis * 0.12)
             if (node.level === 0 || selected) opacity = 1
             if (filtersOn && !isMatch) opacity *= 0.28
@@ -585,7 +630,7 @@ export function AtlasMap() {
             return (
               <g
                 key={label.id}
-                opacity={opacity}
+                opacity={hovered ? Math.min(1, opacity + 0.35) : opacity}
                 style={{ cursor: 'pointer' }}
                 onPointerEnter={(e) => setHover({ node, x: e.clientX, y: e.clientY })}
                 onPointerMove={(e) => setHover({ node, x: e.clientX, y: e.clientY })}
@@ -598,9 +643,21 @@ export function AtlasMap() {
                     )
                     return
                   }
-                  enter(node, tier === 2 ? -1 : 1)
+                  enter(node)
                 }}
               >
+                {/* The glyphs themselves are a terrible hit target: only the
+                    painted strokes respond, so a click between two letters
+                    misses. This rect is the actual target. */}
+                <rect
+                  x={label.x - label.w / 2}
+                  y={label.y - label.h / 2}
+                  width={label.w}
+                  height={label.h}
+                  rx={upp * 5}
+                  fill={hovered ? 'rgba(255,255,255,0.05)' : 'transparent'}
+                  pointerEvents="all"
+                />
                 {label.lines.map((line, i) => (
                   <text
                     key={i}
@@ -610,7 +667,7 @@ export function AtlasMap() {
                     textAnchor="middle"
                     dominantBaseline="middle"
                     fontSize={upp * label.font}
-                    fontWeight={weight}
+                    fontWeight={fontWeight}
                     letterSpacing={node.level === 0 ? upp * 0.9 : undefined}
                     fill={fill}
                   >
@@ -671,9 +728,10 @@ export function AtlasMap() {
               </span>
             </div>
             <div style={{ color: 'var(--faint)', marginTop: 4 }}>
-              ↺ marks a failure or rework activity. Domain names carry their own colour, everything
+              Label size is how much is in a field: activities underneath it, weighted by gap. ↺
+              marks a failure or rework activity. Domain names carry their own colour, everything
               else is coloured by state. Nothing is drawn between labels, so a group is whatever sits
-              together.
+              together. Click a label or scroll into it to go deeper.
             </div>
           </div>
         )}
