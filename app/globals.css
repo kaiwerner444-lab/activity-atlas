@@ -1,0 +1,690 @@
+@import 'tailwindcss';
+
+:root {
+  --bg: #0d1016;
+  --panel: #141821;
+  --panel-2: #1a1f2b;
+  --panel-3: #222836;
+  --line: #313849;
+  --line-soft: #232936;
+  --text: #f0f3f9;
+  /* Secondary text still has to be read, not merely sensed. Both of these sit
+     above 7:1 on the panel background. */
+  --dim: #b6bdcd;
+  --faint: #8d95a8;
+
+  /* State colours. Aqua is us, coral is the public corpus, hollow is nobody. */
+  --ours: #5ae2d4;
+  --public: #ffa07a;
+  --lime: #b2e678;
+  --rose: #f480a8;
+  --iris: #a39cff;
+  --accent: #5ae2d4;
+  --accent-dim: #2b8a83;
+
+  --rail: 268px;
+  --inspector: 352px;
+  --topbar: 52px;
+  --timeline: 60px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+.scroll {
+  overflow-y: auto;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+.scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+}
+.scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- shell ---------- */
+
+.shell {
+  display: grid;
+  grid-template-rows: var(--topbar) 1fr;
+  height: 100vh;
+  height: 100dvh;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.brand span {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+}
+.tab {
+  padding: 5px 11px;
+  border-radius: 6px;
+  color: var(--dim);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.tab:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.tab[data-active='true'] {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+.searchbtn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  min-width: 210px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--faint);
+  cursor: pointer;
+}
+.searchbtn:hover {
+  border-color: var(--accent-dim);
+  color: var(--dim);
+}
+.kbd {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+  background: var(--bg);
+  color: var(--faint);
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+}
+
+/* ---------- atlas layout ---------- */
+
+.atlas {
+  display: grid;
+  grid-template-columns: var(--rail) 1fr var(--inspector);
+  grid-template-rows: minmax(0, 1fr) var(--timeline);
+  height: 100%;
+  min-height: 0;
+}
+
+.rail {
+  /* Explicit tracks for every child: items with a definite row are placed before
+     auto-positioned ones, so leaving .stage on auto sends it to the wrong column. */
+  grid-column: 1 / 2;
+  grid-row: 1 / 3;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stage {
+  grid-column: 2 / 3;
+  grid-row: 1 / 2;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  background:
+    radial-gradient(1300px 780px at 50% 44%, #141924 0%, var(--bg) 76%);
+}
+
+.inspector {
+  grid-column: 3 / 4;
+  grid-row: 1 / 3;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.timelinebar {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+.section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.section h3 {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ---------- chips ---------- */
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.chip {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--dim);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 90ms ease, border-color 90ms ease, color 90ms ease;
+}
+.chip:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+.chip[data-on='true'] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  border-color: var(--accent);
+  color: #dcebfb;
+}
+.chip[data-tone='amber'][data-on='true'] {
+  background: color-mix(in srgb, var(--public) 22%, var(--panel-2));
+  border-color: var(--public);
+  color: #f7e6c9;
+}
+.chip[data-tone='red'][data-on='true'] {
+  background: color-mix(in srgb, var(--red) 22%, var(--panel-2));
+  border-color: var(--red);
+  color: #f9d9d9;
+}
+.chip[data-size='sm'] {
+  padding: 1px 7px;
+  font-size: 10.5px;
+}
+
+.toggle {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.toggle button {
+  flex: 1;
+  padding: 4px 8px;
+  background: var(--panel-2);
+  border: 0;
+  color: var(--dim);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.toggle button[data-on='true'] {
+  background: var(--panel-3);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn:hover {
+  border-color: var(--accent-dim);
+}
+.btn[data-variant='primary'] {
+  background: color-mix(in srgb, var(--accent) 26%, var(--panel-2));
+  border-color: var(--accent-dim);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- map ---------- */
+
+.mapsvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.mapsvg[data-panning='true'] {
+  cursor: grabbing;
+}
+.disc {
+  transition: opacity 140ms ease;
+}
+.node-label,
+.cluster-label {
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(9, 11, 16, 0.92);
+  stroke-width: 3.6px;
+  stroke-linejoin: round;
+  font-weight: 500;
+}
+.cluster-label {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.node-sub {
+  pointer-events: none;
+  fill: var(--faint);
+  paint-order: stroke;
+  stroke: rgba(9, 11, 16, 0.92);
+  stroke-width: 3px;
+}
+
+.overlay {
+  position: absolute;
+  z-index: 5;
+}
+
+.breadcrumb {
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.crumb {
+  color: var(--dim);
+  background: color-mix(in srgb, var(--panel) 84%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+.crumb:hover {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+.crumb[data-current='true'] {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+.crumb-sep {
+  color: var(--faint);
+}
+
+.legend {
+  bottom: 12px;
+  left: 14px;
+  max-width: 320px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 11px;
+  backdrop-filter: blur(3px);
+  max-width: 330px;
+}
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.hint {
+  bottom: 12px;
+  right: 14px;
+  color: var(--faint);
+  font-size: 11px;
+  text-align: right;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  max-width: 300px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- inspector ---------- */
+
+.insp-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+}
+.insp-def {
+  color: var(--dim);
+  margin: 0 0 10px;
+}
+.kv {
+  display: grid;
+  grid-template-columns: 108px 1fr;
+  gap: 3px 10px;
+  font-size: 12px;
+}
+.kv dt {
+  color: var(--faint);
+}
+.kv dd {
+  margin: 0;
+}
+
+.meter {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--panel-3);
+  overflow: hidden;
+}
+.meter > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.callout {
+  border-left: 2px solid var(--accent-dim);
+  background: var(--panel-2);
+  padding: 8px 10px;
+  border-radius: 0 7px 7px 0;
+  color: var(--dim);
+}
+.callout[data-tone='warn'] {
+  border-left-color: var(--public);
+}
+.callout[data-tone='block'] {
+  border-left-color: var(--red);
+}
+
+/* ---------- tables ---------- */
+
+.page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.page-head {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.page-head h1 {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.page-head p {
+  margin: 0;
+  color: var(--dim);
+  max-width: 78ch;
+}
+
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  table-layout: fixed;
+  /* Below this the numeric columns start hyphenating "none". Let the container
+     scroll sideways instead of crushing the data. */
+  min-width: 940px;
+}
+table.grid col.c-pick {
+  width: 34px;
+}
+table.grid col.c-title {
+  width: 26%;
+}
+table.grid col.c-path {
+  width: auto;
+}
+table.grid col.c-short {
+  width: 92px;
+}
+table.grid col.c-num {
+  width: 68px;
+}
+table.grid td {
+  overflow-wrap: anywhere;
+}
+table.grid th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--faint);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+table.grid th[data-sortable='false'] {
+  cursor: default;
+}
+/* Numeric headers have to follow their values to the right edge, otherwise the
+   label sits at one end of a wide column and the number at the other. */
+table.grid th.num {
+  text-align: right;
+}
+table.grid td {
+  border-bottom: 1px solid var(--line-soft);
+  padding: 7px 10px;
+  vertical-align: top;
+}
+table.grid tr:hover td {
+  background: var(--panel-2);
+}
+.num {
+  text-align: right;
+  font-family: ui-monospace, monospace;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* ---------- search ---------- */
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(5, 7, 12, 0.62);
+  display: flex;
+  justify-content: center;
+  padding-top: 12vh;
+}
+.palette {
+  width: min(680px, 92vw);
+  max-height: 66vh;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.palette input {
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  padding: 13px 15px;
+  font-size: 14px;
+  outline: none;
+  width: 100%;
+}
+.palette-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 8px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line-soft);
+}
+.palette-row[data-active='true'] {
+  background: var(--panel-3);
+}
+.palette-path {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.empty {
+  color: var(--faint);
+  padding: 22px 16px;
+  text-align: center;
+}
+
+@media (max-width: 1180px) {
+  .atlas {
+    grid-template-columns: 220px 1fr 300px;
+  }
+}
+
+@media (max-width: 960px) {
+  .atlas {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(280px, 46vh) auto auto auto;
+  }
+  .stage {
+    grid-column: 1 / 2;
+    grid-row: 1 / 2;
+  }
+  .timelinebar {
+    grid-column: 1 / 2;
+    grid-row: 2 / 3;
+  }
+  .rail {
+    grid-column: 1 / 2;
+    grid-row: 3 / 4;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+    max-height: 340px;
+  }
+  .inspector {
+    grid-column: 1 / 2;
+    grid-row: 4 / 5;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    max-height: 420px;
+  }
+  .atlas {
+    overflow-y: auto;
+  }
+}
+
+.lassobar {
+  bottom: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.55);
+}
+
+.legend-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  padding: 0;
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.legend-toggle:hover {
+  color: var(--text);
+}
