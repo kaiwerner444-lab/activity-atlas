@@ -1,6 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { pointer, select } from 'd3-selection'
+import { zoom as d3zoom, type D3ZoomEvent, type ZoomBehavior } from 'd3-zoom'
+import 'd3-transition'
+import {
+  cameraFromTransform,
+  flightDuration,
+  transformFromCamera,
+  wheelDelta,
+  type Camera,
+} from '@/lib/camera'
 import { LAYOUT, WORLD_FRAME, WORLD_RADIUS, frameHeight, type NodePoint } from '@/lib/layout'
 import { ATLAS, ancestors, getNode, kinNodes } from '@/lib/taxonomy'
 import { nodeStyle, domainColor, HIGHLIGHT_MODES } from '@/lib/colors'
@@ -13,13 +23,6 @@ import type { AtlasNode } from '@/lib/types'
 // the frame enters that group, so one continuous gesture walks World -> domain
 // -> family -> procedure without a single click.
 
-interface Camera {
-  cx: number
-  cy: number
-  /** Half-height of the visible world region. */
-  h: number
-}
-
 function worldCamera(aspect: number): Camera {
   return {
     cx: WORLD_FRAME.fx,
@@ -29,13 +32,22 @@ function worldCamera(aspect: number): Camera {
     h: Math.max(WORLD_FRAME.fh, WORLD_FRAME.fw / Math.max(aspect, 0.2)) * 1.24,
   }
 }
-const EASE = (t: number) => 1 - Math.pow(1 - t, 3)
-const DURATION = 420
+/** One level change per gesture. Trackpad inertia keeps firing after your
+ *  fingers lift, and without this a flick falls through three levels at once. */
+const LEVEL_COOLDOWN = 280
 const round2 = (v: number) => Math.round(v * 100) / 100
+
+/**
+ * Past a point, zooming in stops adding information. Labels are a fixed size in
+ * screen pixels, so a tighter camera on a small group does not reveal anything,
+ * it just pushes three words into the corners of an empty screen. MIN_FRAME is
+ * where that stops being worth doing.
+ */
+const MIN_FRAME = 300
 
 function cameraFor(point: NodePoint | undefined, aspect: number): Camera {
   if (!point) return worldCamera(aspect)
-  return { cx: point.fx, cy: point.fy, h: Math.max(frameHeight(point, aspect), 100) }
+  return { cx: point.fx, cy: point.fy, h: Math.max(frameHeight(point, aspect), MIN_FRAME) }
 }
 
 interface Drawn {
@@ -187,56 +199,98 @@ export function AtlasMap() {
   const [size, setSize] = useState({ w: 1200, h: 800 })
   const aspectRef = useRef(1.5)
   const [camera, setCamera] = useState<Camera>(() => worldCamera(1.5))
-  const cameraRef = useRef(camera)
-  cameraRef.current = camera
-  const animRef = useRef<number | null>(null)
-
   const [hover, setHover] = useState<{ node: AtlasNode; x: number; y: number } | null>(null)
   const [panning, setPanning] = useState(false)
   const [lassoIds, setLassoIds] = useState<string[]>([])
   const [lasso, setLasso] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const [legendOpen, setLegendOpen] = useState(false)
+  const cameraRef = useRef(camera)
+  cameraRef.current = camera
+  const sizeRef = useRef(size)
+  sizeRef.current = size
 
+  // Measure the stage. Everything downstream (viewBox, label sizing, the zoom
+  // transform) is derived from this, so it has to be real pixels rather than the
+  // placeholder the component starts with.
   useEffect(() => {
-    const el = svgRef.current?.parentElement
-    if (!el) return
-    const ro = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect
-      if (width > 0 && height > 0) setSize({ w: width, h: height })
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-
-  const flyTo = useCallback((target: Camera) => {
-    if (animRef.current) cancelAnimationFrame(animRef.current)
-    const from = cameraRef.current
-    const start = performance.now()
-    const step = (now: number) => {
-      const t = Math.min(1, (now - start) / DURATION)
-      const e = EASE(t)
-      const next = {
-        cx: from.cx + (target.cx - from.cx) * e,
-        cy: from.cy + (target.cy - from.cy) * e,
-        h: from.h + (target.h - from.h) * e,
+    const host = svgRef.current?.parentElement
+    if (!host) return
+    // Read the same box d3 reads. Any gap between this and the box the zoom
+    // behaviour measures shows up as the camera and the pointer anchor
+    // disagreeing about where the cursor is, which drifts a little further with
+    // every notch and eventually enters the wrong branch entirely.
+    const measure = () => {
+      const { width, height } = host.getBoundingClientRect()
+      if (width > 0 && height > 0) {
+        setSize((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }))
       }
-      cameraRef.current = next
-      setCamera(next)
-      if (t < 1) animRef.current = requestAnimationFrame(step)
     }
-    animRef.current = requestAnimationFrame(step)
+    // Measure now rather than waiting to be told. A ResizeObserver's first
+    // callback is asynchronous at best and, in some embedded browsers, never
+    // arrives at all; until it does the map is rendering against a placeholder
+    // viewport that nothing else agrees with.
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(host)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
   }, [])
 
-  // A focus change that came from the wheel is already where the camera is.
-  // Flying to it would fight the gesture, so only animate the other sources.
-  const wheelFocusRef = useRef(false)
-  useEffect(() => {
-    if (wheelFocusRef.current) {
-      wheelFocusRef.current = false
-      return
+  const zoomRef = useRef<ZoomBehavior<HTMLElement, unknown> | null>(null)
+  /**
+   * Crossing a level flies the camera into the group rather than leaving it
+   * wherever the cursor happened to be. d3 cancels a running transition the
+   * moment a new gesture starts, so this stays interruptible: keep scrolling and
+   * you keep going, stop and you land squarely inside the thing you entered.
+   */
+  const gestureFocusRef = useRef(false)
+  const lastLevelChange = useRef(0)
+  const lastSource = useRef<string | null>(null)
+  /** Whether the current gesture crossed a level, which is the only case the settle exists for. */
+  const levelChanged = useRef(false)
+  const focusRef = useRef(focusId)
+  focusRef.current = focusId
+
+  /**
+   * True while the camera is being moved by us rather than by the user.
+   *
+   * This cannot be inferred from the zoom event. d3 keeps a wheel gesture alive
+   * for 150ms after the last notch, and a transition started inside that window
+   * reuses the same gesture object, inheriting its sourceEvent. The flight that
+   * follows a level change therefore reads back as user input, re-runs the level
+   * check, and drops straight back into the group it just left.
+   */
+  const flying = useRef(false)
+
+  /** Move the camera by driving the zoom behaviour, so d3 stays the source of truth. */
+  const applyCamera = useCallback((target: Camera, animate: boolean) => {
+    const host = svgRef.current?.parentElement
+    const z = zoomRef.current
+    if (!host || !z) return
+    const view = sizeRef.current
+    const sel = select(host)
+    const transform = transformFromCamera(target, view)
+    flying.current = true
+    if (animate) {
+      sel
+        .transition()
+        .duration(flightDuration(cameraRef.current, target, view))
+        .call(z.transform, transform)
+        // A transition superseded before it starts fires "cancel", not
+        // "interrupt". Missing that leaves the flag stuck on and every gesture
+        // after it is silently treated as our own camera move.
+        .on('end.flight interrupt.flight cancel.flight', () => {
+          flying.current = false
+        })
+    } else {
+      sel.call(z.transform, transform)
+      flying.current = false
     }
-    flyTo(cameraFor(focusId ? LAYOUT.get(focusId) : undefined, aspectRef.current))
-  }, [focusId, flyTo])
+  }, [])
+
 
   const focusNode = getNode(focusId)
 
@@ -355,8 +409,6 @@ export function AtlasMap() {
   }, [drawn, upp])
 
   // ---- interaction --------------------------------------------------------
-  const focusRef = useRef(focusId)
-  focusRef.current = focusId
 
   /** Nearest group at the current level whose frame contains the camera. */
   const nearestGroup = useCallback((cx: number, cy: number) => {
@@ -368,85 +420,180 @@ export function AtlasMap() {
     for (const node of candidates) {
       const point = LAYOUT.get(node.id)
       if (!point) continue
+      // Nearest wins outright, with no proximity test at all. Any bound strands
+      // you somewhere: aim into the gap between two groups and nothing happens,
+      // aim at the centre of a level and every child is equidistant and outside
+      // its own extent. Zooming in is a request to go one level down, and the
+      // only question worth answering is which one.
       const d = Math.hypot(point.fx - cx, point.fy - cy)
-      if (d > point.fit) continue
       if (!best || d < best.d) best = { node, point, d }
     }
     return best
   }, [])
 
-  useEffect(() => {
-    const svg = svgRef.current
-    if (!svg) return
-    const handler = (e: WheelEvent) => {
-      e.preventDefault()
-      const cam = cameraRef.current
-      // Normalise line and page scroll modes so a wheel and a trackpad travel a
-      // comparable distance per gesture.
-      const raw = e.deltaMode === 1 ? e.deltaY * 18 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY
-      // Roughly two notches per level from a standing start. Anything slower and
-      // going three levels deep is a chore rather than a gesture.
-      const factor = Math.exp(Math.max(-150, Math.min(150, raw)) * 0.0105)
-      const zoomingIn = factor < 1
+  /**
+   * Semantic level follows the scale. Zooming in far enough that a group would
+   * be comfortably framed enters it; zooming back out past the current group
+   * leaves it. The thresholds are asymmetric so the two cannot chatter against
+   * each other, and a cooldown stops trackpad inertia falling through levels.
+   */
+  /**
+   * Where the pointer is, in world units, asked of d3 rather than recomputed.
+   *
+   * Deriving this from the camera and a separately measured rect means two
+   * sources of truth for the same number, and they drift: d3 anchors on the
+   * host's own pixel box while the camera is derived from an observed content
+   * box. Inverting d3's transform through d3's pointer cannot disagree with the
+   * zoom that is actually being applied.
+   */
+  const pointerWorld = useCallback(
+    (event: D3ZoomEvent<HTMLElement, unknown>, cam: Camera) => {
+      const host = svgRef.current?.parentElement as HTMLElement | null
+      const source = event.sourceEvent as { clientX?: number } | null
+      if (!host || !source || source.clientX === undefined) return { x: cam.cx, y: cam.cy }
+      const [x, y] = event.transform.invert(pointer(event.sourceEvent, host))
+      return { x, y }
+    },
+    [],
+  )
 
-      // Floor the zoom against the current context: once a group fills the
-      // frame there is nothing further in, and depth is the drill's job.
+  const crossLevels = useCallback(
+    (cam: Camera, zoomingIn: boolean, aim: { x: number; y: number }) => {
+      const now = performance.now()
+      if (now - lastLevelChange.current < LEVEL_COOLDOWN) return
+      const aspect = aspectRef.current
       const currentId = focusRef.current
-      const currentPoint = currentId ? LAYOUT.get(currentId) : undefined
-      const contextH = currentPoint ? frameHeight(currentPoint, aspectRef.current) : 0
-      const floor = Math.max(60, contextH * 0.38)
-      const h = Math.max(floor, Math.min(WORLD_RADIUS * 1.35, cam.h * factor))
-
-      const rect = svg.getBoundingClientRect()
-      const scale = (cam.h * 2) / rect.height
-      const ax = cam.cx + (e.clientX - rect.left - rect.width / 2) * scale
-      const ay = cam.cy + (e.clientY - rect.top - rect.height / 2) * scale
-      const ratio = h / cam.h
-      let cx = ax + (cam.cx - ax) * ratio
-      let cy = ay + (cam.cy - ay) * ratio
-
-      // Zooming in is a request to go into something, not to fall between two
-      // things. Ease the centre toward the group being entered so the gesture
-      // lands on content instead of on the gap next to it.
-      const target = zoomingIn ? nearestGroup(cx, cy) : currentId ? LAYOUT.get(currentId) : null
-      if (target) {
-        const tx = 'point' in target ? target.point.fx : target.fx
-        const ty = 'point' in target ? target.point.fy : target.fy
-        const pull = zoomingIn ? 0.22 : 0.1
-        cx += (tx - cx) * pull
-        cy += (ty - cy) * pull
-      }
-
-      const next: Camera = { h, cx, cy }
-      if (animRef.current) cancelAnimationFrame(animRef.current)
-      cameraRef.current = next
-      setCamera(next)
-
-      // Level crossing.
       const current = currentId ? getNode(currentId) : null
-      if (current) {
+
+      // Direction decides which crossing is even considered. Exit and entry are
+      // measured against different nodes, so a sibling with a larger frame can
+      // satisfy the entry test the instant you leave its neighbour: scrolling
+      // out then bounces in and out forever. Scrolling out can only ever leave.
+      if (!zoomingIn && current) {
         const self = LAYOUT.get(current.id)
-        if (self && h > frameHeight(self, aspectRef.current) * 1.9) {
-          wheelFocusRef.current = true
+        if (self && cam.h > frameHeight(self, aspect) * 3.6) {
+          lastLevelChange.current = now
+          levelChanged.current = true
           focusRef.current = current.parentId
           setFocus(current.parentId)
           return
         }
       }
-      const entering = zoomingIn ? nearestGroup(cx, cy) : null
-      // Enter as soon as the group is comfortably framed, rather than waiting
-      // for it to fill the screen edge to edge.
-      if (entering && h < frameHeight(entering.point, aspectRef.current) * 1.5) {
-        wheelFocusRef.current = true
+
+      if (!zoomingIn) return
+      // Query from the pointer, not the viewport centre. Zoom is anchored on the
+      // cursor, so the centre lags behind it and only converges after several
+      // notches: aiming at one domain and being dropped into its neighbour was
+      // the centre answering a question the user asked with the cursor.
+      // Query from the pointer, not the viewport centre. Zoom is anchored on the
+      // cursor, so the centre lags behind it and only converges after several
+      // notches: aiming at one domain and being dropped into its neighbour was
+      // the centre answering a question the user asked with the cursor.
+      const entering = nearestGroup(aim.x, aim.y)
+      // Enter well before the group fills the screen. The flight that follows
+      // does the rest of the work, so the gesture stays short and the landing is
+      // exact; waiting for a perfect fit is what made this take five notches.
+      if (entering && cam.h < frameHeight(entering.point, aspect) * 2.8) {
+        lastLevelChange.current = now
+        levelChanged.current = true
         focusRef.current = entering.node.id
         setFocus(entering.node.id)
         setSelected(entering.node.id)
       }
-    }
-    svg.addEventListener('wheel', handler, { passive: false })
-    return () => svg.removeEventListener('wheel', handler)
-  }, [nearestGroup, setFocus, setSelected])
+    },
+    [nearestGroup, setFocus, setSelected],
+  )
 
+  // d3-zoom owns wheel, drag and touch. Its wheel handling is the part worth
+  // borrowing: delta modes, per-browser magnitudes and trackpad pinch (a wheel
+  // event with ctrlKey) are all normalised, and it registers non-passively so
+  // the page never scrolls underneath the map.
+  useEffect(() => {
+    // The behaviour listens on the stage element, not the svg. d3 reports the
+    // pointer in the listener's own coordinate system, and an svg with a viewBox
+    // reports world units while this camera works in pixels; mixing the two makes
+    // the anchor drift a little further off with every notch until the view is
+    // somewhere in deep space.
+    const host = svgRef.current?.parentElement as HTMLElement | null
+    if (!host) return
+    const sel = select<HTMLElement, unknown>(host)
+    const behavior = d3zoom<HTMLElement, unknown>()
+      .wheelDelta(wheelDelta)
+      .filter((event: MouseEvent | WheelEvent | TouchEvent) => {
+        // Shift-drag is the lasso, so the zoom behaviour must not claim it.
+        if ((event as MouseEvent).shiftKey && event.type !== 'wheel') return false
+        return (!(event as MouseEvent).ctrlKey || event.type === 'wheel') && !(event as MouseEvent).button
+      })
+      .on('start', (event: D3ZoomEvent<HTMLElement, unknown>) => {
+        setPanning(true)
+        levelChanged.current = false
+        // A real gesture means the user has taken the camera back, whatever we
+        // thought we were doing with it.
+        if (event.sourceEvent) flying.current = false
+      })
+      .on('end', () => {
+        setPanning(false)
+        // Settle, but only after a gesture that actually crossed a level.
+        // Scrolling cancels the flight a crossing starts, which is right while
+        // the gesture runs and wrong the moment it stops, leaving the view half
+        // way between two levels. Zooming that stays within one level is left
+        // alone: correcting it would be taking the map back off someone who
+        // deliberately moved it.
+        if (lastSource.current !== 'wheel' || !levelChanged.current) return
+        levelChanged.current = false
+        lastSource.current = null
+        const point = focusRef.current ? LAYOUT.get(focusRef.current) : undefined
+        applyCamera(cameraFor(point, aspectRef.current), true)
+      })
+      .on('zoom', (event: D3ZoomEvent<HTMLElement, unknown>) => {
+        const fromUser = Boolean(event.sourceEvent) && !flying.current
+        if (fromUser) lastSource.current = event.sourceEvent.type
+        const previousH = cameraRef.current.h
+        const cam = cameraFromTransform(event.transform, sizeRef.current)
+        cameraRef.current = cam
+        setCamera(cam)
+        // Only a real gesture crosses levels. Programmatic flights must not, or
+        // flying into a node would immediately drill past it.
+        if (fromUser) crossLevels(cam, cam.h < previousH, pointerWorld(event, cam))
+      })
+
+    zoomRef.current = behavior
+    sel.call(behavior)
+    // Double click is "up one level" here, not d3's zoom-in.
+    sel.on('dblclick.zoom', null)
+    sel.call(behavior.transform, transformFromCamera(cameraRef.current, sizeRef.current))
+
+    return () => {
+      sel.on('.zoom', null)
+      zoomRef.current = null
+    }
+  }, [crossLevels, applyCamera, pointerWorld])
+
+  // Keep the scale bounded to something the atlas can actually show, and re-frame
+  // on resize. The behaviour is installed before the first measurement, so its
+  // seed transform is based on a guessed viewport; and the same camera needs a
+  // different transform once the stage has a different size.
+  useEffect(() => {
+    const host = svgRef.current?.parentElement as HTMLElement | null
+    const z = zoomRef.current
+    if (!host || !z) return
+    const world = worldCamera(size.w / size.h)
+    z.scaleExtent([size.h / (2 * world.h * 1.15), size.h / (2 * MIN_FRAME * 0.7)])
+    const framed = cameraFor(focusRef.current ? LAYOUT.get(focusRef.current) : undefined, size.w / size.h)
+    select(host).call(z.transform, transformFromCamera(framed, size))
+  }, [size])
+
+  // A focus change from the wheel is already where the camera is; anything else
+  // (click, breadcrumb, search, keyboard) gets flown to.
+  useEffect(() => {
+    if (gestureFocusRef.current) {
+      gestureFocusRef.current = false
+      return
+    }
+    applyCamera(cameraFor(focusId ? LAYOUT.get(focusId) : undefined, aspectRef.current), true)
+  }, [focusId, applyCamera])
+
+  // ---- lasso and click/drag discrimination --------------------------------
   const toWorld = useCallback(
     (clientX: number, clientY: number) => {
       const rect = svgRef.current!.getBoundingClientRect()
@@ -459,65 +606,43 @@ export function AtlasMap() {
     [camera],
   )
 
-  const dragState = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null)
   // How far the pointer travelled during the current press. A click fires after
   // pointerup, so testing React state here would read whatever the last render
-  // saw; a ref is the only thing that is up to date at the moment it matters.
+  // saw; a ref is the only thing up to date at the moment it matters.
   const dragDist = useRef(0)
+  const pressOrigin = useRef<{ x: number; y: number } | null>(null)
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return
+    dragDist.current = 0
+    pressOrigin.current = { x: e.clientX, y: e.clientY }
     if (e.shiftKey) {
       const p = toWorld(e.clientX, e.clientY)
       setLasso({ x0: p.x, y0: p.y, x1: p.x, y1: p.y })
-      return
     }
-    dragDist.current = 0
-    dragState.current = { x: e.clientX, y: e.clientY, cx: camera.cx, cy: camera.cy }
   }
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (lasso) {
-      const p = toWorld(e.clientX, e.clientY)
-      setLasso((l) => (l ? { ...l, x1: p.x, y1: p.y } : l))
-      return
-    }
-    const d = dragState.current
-    if (!d) return
-    const rect = svgRef.current!.getBoundingClientRect()
-    const scale = (camera.h * 2) / rect.height
-    dragDist.current = Math.hypot(e.clientX - d.x, e.clientY - d.y)
-    // Only start panning past a real threshold. A few pixels of wobble between
-    // press and release is a click, not a drag.
-    if (!panning && dragDist.current > 5) setPanning(true)
-    if (dragDist.current <= 5) return
-    if (animRef.current) cancelAnimationFrame(animRef.current)
-    const next = {
-      ...camera,
-      cx: d.cx - (e.clientX - d.x) * scale,
-      cy: d.cy - (e.clientY - d.y) * scale,
-    }
-    cameraRef.current = next
-    setCamera(next)
+    const origin = pressOrigin.current
+    if (origin) dragDist.current = Math.hypot(e.clientX - origin.x, e.clientY - origin.y)
+    if (!lasso) return
+    const p = toWorld(e.clientX, e.clientY)
+    setLasso((l) => (l ? { ...l, x1: p.x, y1: p.y } : l))
   }
 
   const onPointerUp = () => {
-    if (lasso) {
-      const minX = Math.min(lasso.x0, lasso.x1)
-      const maxX = Math.max(lasso.x0, lasso.x1)
-      const minY = Math.min(lasso.y0, lasso.y1)
-      const maxY = Math.max(lasso.y0, lasso.y1)
-      const picked = drawn
-        .filter((d) => d.relDepth >= 0)
-        .filter(
-          (d) => d.point.x >= minX && d.point.x <= maxX && d.point.y >= minY && d.point.y <= maxY,
-        )
-        .map((d) => d.node.id)
-      setLassoIds(Array.from(new Set(picked)))
-      setLasso(null)
-    }
-    dragState.current = null
-    setPanning(false)
+    pressOrigin.current = null
+    if (!lasso) return
+    const minX = Math.min(lasso.x0, lasso.x1)
+    const maxX = Math.max(lasso.x0, lasso.x1)
+    const minY = Math.min(lasso.y0, lasso.y1)
+    const maxY = Math.max(lasso.y0, lasso.y1)
+    const picked = drawn
+      .filter((d) => d.relDepth >= 0)
+      .filter((d) => d.point.x >= minX && d.point.x <= maxX && d.point.y >= minY && d.point.y <= maxY)
+      .map((d) => d.node.id)
+    setLassoIds(Array.from(new Set(picked)))
+    setLasso(null)
   }
 
   useEffect(() => {
@@ -541,11 +666,7 @@ export function AtlasMap() {
     return () => window.removeEventListener('keydown', onKey)
   }, [focusId, selectedId, setFocus, lassoIds.length])
 
-  /**
-   * Clicking a label is the same gesture as scrolling into it. Context labels
-   * count too: seeing a neighbouring domain and not being able to click it is
-   * worse than not drawing it at all.
-   */
+
   const enter = (node: AtlasNode) => {
     if (dragDist.current > 5) return
     setSelected(node.id)

@@ -33,6 +33,8 @@ export interface NodePoint {
 }
 
 const RING = [0, 210, 400, 560]
+/** Arc length a child wants to itself, in world units before cluster scaling. */
+const ARC_PER_CHILD = 135
 const GLYPH = [26, 15, 10, 7]
 const CLUSTER_GAP = 215
 
@@ -63,8 +65,14 @@ function layoutCluster(root: AtlasNode, scale: number): Map<string, NodePoint> {
     const kids = node.childIds.map((id) => ATLAS.nodes.get(id)!)
     if (kids.length === 0) return
     const totalWeight = kids.reduce((s, k) => s + Math.max(1, k.leafCount), 0)
-    // Leave a little air between sibling wedges so boundaries do not collide.
-    const usable = span * (node.level === 0 ? 1 : 0.86)
+    // Leave a little air between sibling wedges so groups stay distinguishable.
+    const inherited = span * (node.level === 0 ? 1 : 0.86)
+    // Cap the spread by what the children actually need. A wedge inherited from
+    // a big branch, applied at a large radius, throws three siblings hundreds of
+    // units apart for no reason: arc length, not angle, is what the eye reads.
+    const childRadius = RING[Math.min(node.level + 1, 3)] * scale
+    const needed = childRadius > 0 ? (kids.length * ARC_PER_CHILD) / childRadius : inherited
+    const usable = Math.min(inherited, needed)
     let cursor = centreAngle - usable / 2
     for (const kid of kids) {
       const weight = Math.max(1, kid.leafCount) / totalWeight
@@ -133,10 +141,11 @@ function buildLayout(): Map<string, NodePoint> {
   for (const node of ATLAS.all) {
     const self = out.get(node.id)
     if (!self) continue
-    // Frame the node and its direct children, nothing deeper. The map only ever
-    // draws one level below the focus, so framing the whole subtree would zoom
-    // out to fit rows that are not on screen.
-    const members = [node.id, ...node.childIds]
+    // Frame the children and nothing else. The focused node is never drawn (it
+    // is named in the breadcrumb), and it sits one ring inward toward the hub,
+    // so including it drags the camera back down the spoke and fills half the
+    // screen with the gap where it would have been.
+    const members = node.childIds.length > 0 ? node.childIds : [node.id]
     let minX = Infinity
     let maxX = -Infinity
     let minY = Infinity
@@ -159,7 +168,12 @@ function buildLayout(): Map<string, NodePoint> {
     self.fy = round((minY + maxY) / 2)
     self.fw = round(Math.max((maxX - minX) / 2, 70))
     self.fh = round(Math.max((maxY - minY) / 2, 70))
-    self.fit = round(Math.max(Math.hypot(self.fw, self.fh), 90))
+    // Containment is deliberately more generous than the frame, and does include
+    // the node itself: zooming toward a label has to count as aiming at the group
+    // that label opens, even though the camera will not centre on the label.
+    self.fit = round(
+      Math.max(Math.hypot(self.fw, self.fh), Math.hypot(self.x - self.fx, self.y - self.fy) + 90),
+    )
   }
 
   return out
@@ -206,7 +220,7 @@ export function pointFor(id: string): NodePoint | undefined {
  * the further out the camera has to sit for them to read as a group.
  */
 export function frameHeight(point: NodePoint, aspect: number): number {
-  const pad = Math.min(2.6, 1.35 + 2.2 / Math.max(point.kids, 1))
+  const pad = Math.min(2.2, 1.25 + 1.4 / Math.max(point.kids, 1))
   return Math.max(point.fh, point.fw / Math.max(aspect, 0.2)) * pad
 }
 

@@ -99,9 +99,39 @@ State lives in the URL, so a slice survives being pasted into an email:
 `path` is the focused node, `sel` the selected node, `facets` the filter set, `hl` the
 colour mode, `t` the coverage timeline cutoff.
 
+## Navigation
+
+Scroll to go deeper, or click a label. Both do the same thing: enter the group. Esc or
+double-click goes up, `/` searches, shift-drag lassos a set into a collection plan.
+
+Input is handled by `d3-zoom` rather than by hand. Wheel events are the part that is
+genuinely hard to get right: pixel, line and page delta modes report wildly different
+magnitudes, every browser disagrees, a trackpad emits a stream of small deltas where a
+mouse emits one large one, and trackpad pinch arrives as a wheel event with `ctrlKey`
+set. d3 normalises all of it and registers non-passively so the page never scrolls
+under the map. Two things sit on top:
+
+- **Level crossing.** Zooming in far enough that a group would be comfortably framed
+  enters it; zooming out past the current group leaves it. Thresholds are asymmetric so
+  the two cannot chatter, and a cooldown stops trackpad inertia falling through three
+  levels on one flick.
+- **Flights use `interpolateZoom`**, d3's implementation of van Wijk and Nuij's optimal
+  zoom path, where the apparent velocity of the content stays constant instead of the
+  scale changing linearly. Duration comes from the path length it reports, so a hop to a
+  neighbour is quick and a jump across the atlas gets the time it needs. Scrolling
+  interrupts a flight, and the view settles onto the level you landed in once the wheel
+  goes quiet.
+
+The camera is stored as a centre and a half-height in world units and converted to a
+zoom transform at the edge (`lib/camera.ts`). That is what keeps label sizes fixed in
+screen pixels: the map renders through the viewBox rather than through a scaled group,
+so text never inherits the zoom. The zoom behaviour is attached to the stage element,
+not the SVG, because d3 reports the pointer in the listener's own coordinate system and
+an SVG with a viewBox reports world units.
+
 ## Stack
 
-Next.js 15 App Router, React 19, TypeScript, Tailwind v4, `d3-hierarchy` for cluster
-packing. No mind-map library: they optimise for editing trees, not for coverage
-colouring and semantic zoom. Content is a TypeScript repo today and moves to Postgres
-when coverage events and auth arrive.
+Next.js 15 App Router, React 19, TypeScript, Tailwind v4. `d3-hierarchy` packs the
+clusters, `d3-zoom` and `d3-interpolate` drive the camera. No mind-map library: they
+optimise for editing trees, not for coverage colouring and semantic zoom. Content is a
+TypeScript repo today and moves to Postgres when coverage events and auth arrive.
