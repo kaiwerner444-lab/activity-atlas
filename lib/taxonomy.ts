@@ -85,6 +85,7 @@ function build(): Atlas {
       objects: spec.objects ?? [],
       tools: spec.tools ?? [],
       cue: spec.cue,
+      verify: spec.verify,
       prevalence,
       fail,
       notes: spec.notes,

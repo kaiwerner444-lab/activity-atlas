@@ -82,6 +82,14 @@ export interface NodeSpec {
    * for instrumented capture over more ego video.
    */
   cue?: string
+  /**
+   * The proof step: what you do afterwards to show it actually worked. Throwing
+   * a breaker and tugging the handle are the same motion to a camera and are not
+   * the same act. Competence is mostly the second half, and almost no dataset
+   * records it, because a policy that isolates a circuit looks identical to one
+   * that isolates it and then confirms.
+   */
+  verify?: string
   prevalence?: Prevalence
   /** Marks a failure / diagnosis / rework leaf. Also implies the `recover` primitive. */
   fail?: boolean
@@ -106,6 +114,8 @@ export interface AtlasNode {
   tools: string[]
   /** Termination condition. See NodeSpec.cue. */
   cue?: string
+  /** Proof step. See NodeSpec.verify. */
+  verify?: string
   prevalence: Prevalence
   fail: boolean
   notes?: string

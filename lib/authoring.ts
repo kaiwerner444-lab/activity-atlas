@@ -30,6 +30,8 @@ export type Opts = FacetPatch & {
   tool?: string[]
   /** How you know it is done. See NodeSpec.cue. */
   cue?: string
+  /** How you prove it worked. See NodeSpec.verify. */
+  verify?: string
   prev?: Prevalence
   /** Failure, diagnosis or rework leaf. Implies the `recover` primitive. */
   fail?: boolean
@@ -38,7 +40,7 @@ export type Opts = FacetPatch & {
 
 function split(
   opts: Opts | undefined,
-): Pick<NodeSpec, 'f' | 'primitives' | 'objects' | 'tools' | 'cue' | 'prevalence' | 'fail' | 'notes'> {
+): Pick<NodeSpec, 'f' | 'primitives' | 'objects' | 'tools' | 'cue' | 'verify' | 'prevalence' | 'fail' | 'notes'> {
   if (!opts) return {}
   const f: FacetPatch = {}
   for (const key of Object.keys(opts) as (keyof Opts)[]) {
@@ -53,6 +55,7 @@ function split(
     objects: opts.obj,
     tools: opts.tool,
     cue: opts.cue,
+    verify: opts.verify,
     prevalence: opts.prev,
     fail: opts.fail,
     notes: opts.notes,

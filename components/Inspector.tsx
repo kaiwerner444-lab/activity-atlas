@@ -114,13 +114,23 @@ export function Inspector() {
           </div>
         </div>
 
-        {node.cue && (
+        {(node.cue || node.verify) && (
           <div className="section">
-            <h3>How you know it is done</h3>
-            <div className="callout">{node.cue}</div>
+            {node.cue && (
+              <>
+                <h3>How you know it is done</h3>
+                <div className="callout">{node.cue}</div>
+              </>
+            )}
+            {node.verify && (
+              <>
+                <h3 style={{ marginTop: node.cue ? 12 : 0 }}>How you prove it worked</h3>
+                <div className="callout">{node.verify}</div>
+              </>
+            )}
             <p style={{ color: 'var(--faint)', margin: '8px 0 0' }}>
-              The stop condition, and the part a camera cannot see. This is what force and tactile
-              capture is for.
+              The stop condition and the proof step: the two halves a camera cannot separate from
+              the motion. This is what force, tactile and a close witness mark are for.
             </p>
           </div>
         )}
