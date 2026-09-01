@@ -46,7 +46,7 @@ export const COVERAGE_EVENTS: CoverageEvent[] = [
   ev('d17.pick-pack.pack-and-induct', 'droid', 'DROID', 420, '2026-01-01', 'public', ['video', 'kinematics']),
   ev('d10.subassembly.kitting.pick-to-kit-tray', 'oxe', 'Open X-Embodiment', 260, '2026-01-01', 'public', ['video', 'kinematics']),
   ev('d05.shelf-work.facing', 'agibot', 'AgiBot World', 310, '2026-03-01', 'public', ['video', 'kinematics']),
-  ev('d02.laundry.washing', 'agibot', 'AgiBot World', 180, '2026-03-01', 'public', ['video', 'kinematics']),
+  ev('d02.laundry.folding', 'agibot', 'AgiBot World', 180, '2026-03-01', 'public', ['video', 'kinematics']),
   ev('d16.floor-care.machine-floor', 'agibot', 'AgiBot World', 95, '2026-03-01', 'public', ['video', 'kinematics']),
 
   // --- ours: small, deliberate, industrial ---------------------------------
