@@ -59,8 +59,12 @@ interface Drawn {
 interface Label {
   id: string
   node: AtlasNode
-  /** 0 = the level you are choosing between, 1 = one level deeper, 2 = context. */
-  tier: 0 | 1 | 2
+  /**
+   * title   the group you are inside
+   * choice  something you can enter from here
+   * context a neighbouring branch, drawn for bearings
+   */
+  role: 'title' | 'choice' | 'context'
   x: number
   y: number
   font: number
@@ -172,9 +176,9 @@ function placeLabels(items: Label[], upp: number): Label[] {
       placed = true
       break
     }
-    // Tier 0 is the level the user is actually choosing between, so it is drawn
-    // even if it has to sit tight against a neighbour.
-    if (!placed && item.tier === 0) out.push({ ...item, ...box })
+    // A title and the choices under it are the point of the view, so they are
+    // drawn even if they have to sit tight against something.
+    if (!placed && item.role !== 'context') out.push({ ...item, ...box })
   }
   return out
 }
@@ -358,9 +362,7 @@ export function AtlasMap() {
 
   // The map is made of words, so the words have to carry the magnitudes. A
   // label's size is how much is in that field and how open it is: activities
-  // underneath it, weighted by gap. Sizes are normalised against the siblings
-  // actually on screen, so the contrast stays readable at every level instead of
-  // collapsing once you are three levels deep and everything is small.
+  // underneath it, weighted by gap.
   const labels = useMemo(() => {
     const BASE = [15, 13.5, 12.5, 12]
     const magnitude = (node: AtlasNode) =>
@@ -376,25 +378,36 @@ export function AtlasMap() {
 
     const items: Label[] = []
     for (const { node, point, relDepth } of drawn) {
-      let tier: 0 | 1 | 2
-      if (relDepth === 1) tier = 0
-      else if (relDepth < 0) tier = 2
+      let role: Label['role']
+      if (relDepth === 0) role = 'title'
+      else if (relDepth === 1) role = 'choice'
+      else if (relDepth < 0) role = 'context'
       else continue
 
-      const norm = tier === 0 ? magnitude(node) / (hi || 1) : 0
-      const font = tier === 0 ? BASE[node.level] * (0.72 + norm * 0.58) : 10.5
+      const norm = role === 'choice' ? magnitude(node) / (hi || 1) : 0
+      const font =
+        role === 'choice'
+          ? BASE[node.level] * (0.72 + norm * 0.58)
+          : role === 'title'
+            ? BASE[node.level] * 1.15
+            : 10.5
+
+      // The title sits above its children rather than on its own hub, which is
+      // one ring inward and often outside the frame entirely. Clamped against
+      // the camera so a group with a shallow spread cannot push it off screen.
+      const titleY = point.fy - Math.min(point.fh + upp * 34, camera.h * 0.84)
 
       items.push({
         id: node.id,
         node,
-        tier,
+        role,
         weight: norm,
-        x: point.x,
-        y: point.y,
+        x: role === 'title' ? point.fx : point.x,
+        y: role === 'title' ? titleY : point.y,
         font,
-        lines: wrapLabel(node.title, node.level === 0 ? 14 : tier === 0 ? 24 : 20),
+        lines: wrapLabel(node.title, node.level === 0 ? 14 : role === 'choice' ? 24 : 20),
         sub:
-          tier === 0
+          role === 'choice'
             ? `${node.leafCount} · gap ${node.gap.toFixed(2)}` +
               (node.ourHours > 0 ? ` · ${Math.round(node.ourHours)}h` : '') +
               (node.facets.partner !== 'none' ? ' · partner' : '') +
@@ -404,11 +417,12 @@ export function AtlasMap() {
         h: 0,
       })
     }
-    // Place the heaviest first: if anything has to be nudged, it should be the
-    // thing that matters least.
-    items.sort((a, b) => a.tier - b.tier || b.weight - a.weight)
+    // Title first so it reserves its space, then the heaviest choices: if
+    // anything has to be nudged, it should be the thing that matters least.
+    const order = { title: 0, choice: 1, context: 2 }
+    items.sort((a, b) => order[a.role] - order[b.role] || b.weight - a.weight)
     return placeLabels(items, upp)
-  }, [drawn, upp])
+  }, [drawn, upp, camera.h])
 
   // ---- interaction --------------------------------------------------------
 
@@ -717,7 +731,7 @@ export function AtlasMap() {
             no dots, no boxes drawn between anything. */}
         <g>
           {labels.map((label) => {
-            const { node, tier } = label
+            const { node, role } = label
             const isMatch = !filtersOn || matches.nodes.has(node.id)
             if (filtersOn && filters.mode === 'isolate' && !isMatch) return null
 
@@ -732,14 +746,15 @@ export function AtlasMap() {
             // you are standing next to. Choices are sentence case, coloured by
             // state, and carry their numbers. Context is small letter-spaced
             // caps in plain grey with nothing under it: territory, not options.
-            const context = tier === 2
-            const caps = context || node.level === 0
+            const context = role === 'context'
+            const title = role === 'title'
+            const caps = context || title || node.level === 0
 
             let fill: string
             if (selected) fill = '#ffffff'
             else if (inLasso) fill = 'var(--lime)'
             else if (context) fill = 'var(--faint)'
-            else if (node.level === 0) fill = domainColor(node.id, 60, 74)
+            else if (title || node.level === 0) fill = domainColor(node.id, 60, 74)
             else fill = style.fill
 
             // Emphasis is carried by hue and weight, not by fading text out.
@@ -747,10 +762,10 @@ export function AtlasMap() {
             // are allowed to recede.
             const fontWeight = context
               ? 500
-              : node.level === 0
+              : title || node.level === 0
                 ? 650
                 : 420 + Math.round(label.weight * 180) + (style.emphasis >= 0.85 ? 40 : 0)
-            let opacity = context ? 0.5 : 0.88 + style.emphasis * 0.12
+            let opacity = context ? 0.5 : title ? 0.72 : 0.88 + style.emphasis * 0.12
             if (selected) opacity = 1
             if (filtersOn && !isMatch) opacity *= 0.28
 
@@ -773,7 +788,10 @@ export function AtlasMap() {
                     )
                     return
                   }
-                  enter(node)
+                  // Clicking the title inspects the group you are already in
+                  // rather than moving anywhere.
+                  if (title) setSelected(node.id)
+                  else enter(node)
                 }}
               >
                 {/* The glyphs themselves are a terrible hit target: only the
