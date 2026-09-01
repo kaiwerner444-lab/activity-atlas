@@ -100,6 +100,7 @@ export const d09: NodeSpec = node(
     node('commissioning', 'Testing, commissioning and safety', 'Proving an installation is safe before anyone relies on it.', { contact: 2, dexterity: 3, prim: ['inspect', 'tool', 'language'], partner: 'licensed', prev: 'common' }, [
       node('isolation', 'Isolate, lock off and prove dead', 'Making a circuit dead and proving it.', { horizon: 'medium', prev: 'ubiquitous', notes: 'High-value safety procedure data: strictly ordered, verbal, and consequential.' }, [
         leaf('lock-off-and-prove', 'Lock off, tag and prove dead', 'Isolate, apply lock and tag, prove the tester, prove dead, prove the tester again.', { prim: ['inspect', 'language', 'fasten'], skillYears: 'months' }),
+        leaf('fold-tagout-hasp', 'Fold a tag-out hasp and snap the lock body', 'Close a multi-lock hasp over an isolator and add your own lock.', { cue: 'The hasp cannot close further and the isolator will not move with a lock fitted.', prim: ['fasten', 'inspect'], prev: 'common' }),
         leaf('permit-handover', 'Permit to work handover', 'Walk the permit with another person, sign, confirm scope verbally.', { prim: ['language'], contact: 1, partner: 'regulated' }),
         leaf('recover-unexpected-live', 'Recover: circuit found live after isolation', 'Stop work, re-trace the supply, find the second feed, re-isolate.', { fail: true, horizon: 'long', robotNow: 'no' }),
       ]),

@@ -15,6 +15,7 @@ import { LAYOUT, WORLD_FRAME, WORLD_RADIUS, frameHeight, type NodePoint } from '
 import { ATLAS, ancestors, getNode, kinNodes } from '@/lib/taxonomy'
 import { nodeStyle, domainColor, HIGHLIGHT_MODES } from '@/lib/colors'
 import { collectorsOn } from '@/lib/filters'
+import { PREVALENCE_WEIGHT } from '@/lib/scoring'
 import { useAtlas } from '@/lib/store'
 import { COLLECTOR_BY_ID } from '@/content/collectors'
 import type { AtlasNode } from '@/lib/types'
@@ -365,8 +366,17 @@ export function AtlasMap() {
   // underneath it, weighted by gap.
   const labels = useMemo(() => {
     const BASE = [15, 13.5, 12.5, 12]
+    // Size is gap and prevalence first, activity count a distant third.
+    //
+    // Seeding is uneven and always will be: one domain gets a careful hundred
+    // rows and its neighbour gets twelve. Keying size on raw count makes the map
+    // report editorial effort as opportunity, which is the one thing it must
+    // never do. The count term is log-damped so tripling a domain's leaves moves
+    // its label by a few per cent, not by a factor of two.
     const magnitude = (node: AtlasNode) =>
-      Math.sqrt(Math.max(1, node.leafCount)) * (0.45 + Math.min(1, node.gap))
+      (0.3 + Math.min(1, node.gap)) *
+      PREVALENCE_WEIGHT[node.prevalence] *
+      (0.6 + (0.4 * Math.log2(4 + node.leafCount)) / 6)
 
     // Size is a ratio to the largest sibling, never a stretch across the range
     // of whatever happens to be on screen. Min-max normalisation makes the

@@ -74,6 +74,14 @@ export interface NodeSpec {
   primitives?: PrimitiveId[]
   objects?: string[]
   tools?: string[]
+  /**
+   * How you know the action is finished: the flush face, the click, the feeler
+   * drag, the witness hole lining up. This is the success predicate, and it is
+   * the part a camera cannot see. Video shows the motion; only force, tactile or
+   * a close witness mark shows the stop condition, which is the whole argument
+   * for instrumented capture over more ego video.
+   */
+  cue?: string
   prevalence?: Prevalence
   /** Marks a failure / diagnosis / rework leaf. Also implies the `recover` primitive. */
   fail?: boolean
@@ -96,6 +104,8 @@ export interface AtlasNode {
   facets: Facets
   objects: string[]
   tools: string[]
+  /** Termination condition. See NodeSpec.cue. */
+  cue?: string
   prevalence: Prevalence
   fail: boolean
   notes?: string

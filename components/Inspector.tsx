@@ -114,6 +114,17 @@ export function Inspector() {
           </div>
         </div>
 
+        {node.cue && (
+          <div className="section">
+            <h3>How you know it is done</h3>
+            <div className="callout">{node.cue}</div>
+            <p style={{ color: 'var(--faint)', margin: '8px 0 0' }}>
+              The stop condition, and the part a camera cannot see. This is what force and tactile
+              capture is for.
+            </p>
+          </div>
+        )}
+
         <div className="section">
           <h3>Why this scores where it does</h3>
           <p style={{ margin: 0, color: 'var(--dim)' }}>{explainGap(node.facets)}</p>

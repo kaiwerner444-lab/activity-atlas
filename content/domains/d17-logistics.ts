@@ -30,6 +30,7 @@ export const d17: NodeSpec = node(
       node('strapping', 'Throw and tension a strap', 'Tensioning a load by hand.', {}, [
         leaf('throw-and-tension-strap', 'Throw and tension a ratchet strap', 'Throw over a load, hook, ratchet to tension, secure the tail.', { prim: ['locomote', 'bimanual'], skillYears: 'months' }),
         leaf('fit-corner-protectors', 'Fit corner protectors and dunnage', 'Place protection where the strap would cut the load.', { prim: ['inspect', 'grasp'] }),
+        leaf('strap-unit-to-nest', 'Strap a unit into its transport nest', 'Secure a finished assembly to its dunnage so it cannot move.', { cue: 'The unit will not walk in the nest under a firm shove from any direction.', prim: ['fasten', 'inspect'], prev: 'common' }),
         leaf('recover-shifted-load', 'Recover: load shifted in transit', 'Open safely, assess, restack and re-secure.', { fail: true, horizon: 'long' }),
       ]),
       node('wrapping', 'Wrap and band a load', 'Film and steel or plastic band.', { dexterity: 4 }, [
