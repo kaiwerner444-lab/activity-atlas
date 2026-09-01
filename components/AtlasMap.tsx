@@ -366,11 +366,13 @@ export function AtlasMap() {
     const magnitude = (node: AtlasNode) =>
       Math.sqrt(Math.max(1, node.leafCount)) * (0.45 + Math.min(1, node.gap))
 
+    // Size is a ratio to the largest sibling, never a stretch across the range
+    // of whatever happens to be on screen. Min-max normalisation makes the
+    // smallest thing tiny and the largest huge no matter how close they really
+    // are: two procedures with 2 leaves each and gaps of 0.31 and 0.33 came out
+    // at twice the size of one another, which is a lie about the data.
     const primary = drawn.filter((d) => d.relDepth === 1)
-    const mags = primary.map((d) => magnitude(d.node))
-    const lo = mags.length ? Math.min(...mags) : 0
-    const hi = mags.length ? Math.max(...mags) : 1
-    const span = hi - lo || 1
+    const hi = primary.length ? Math.max(...primary.map((d) => magnitude(d.node))) : 1
 
     const items: Label[] = []
     for (const { node, point, relDepth } of drawn) {
@@ -379,8 +381,8 @@ export function AtlasMap() {
       else if (relDepth < 0) tier = 2
       else continue
 
-      const norm = tier === 0 ? (magnitude(node) - lo) / span : 0
-      const font = tier === 0 ? BASE[node.level] * (0.74 + norm * 0.78) : 10
+      const norm = tier === 0 ? magnitude(node) / (hi || 1) : 0
+      const font = tier === 0 ? BASE[node.level] * (0.72 + norm * 0.58) : 10.5
 
       items.push({
         id: node.id,
@@ -726,23 +728,30 @@ export function AtlasMap() {
             const inLasso = lassoIds.includes(node.id)
             const hovered = hover?.node.id === node.id
 
+            // Two voices, so a group you can enter never reads like a landmark
+            // you are standing next to. Choices are sentence case, coloured by
+            // state, and carry their numbers. Context is small letter-spaced
+            // caps in plain grey with nothing under it: territory, not options.
+            const context = tier === 2
+            const caps = context || node.level === 0
+
             let fill: string
             if (selected) fill = '#ffffff'
             else if (inLasso) fill = 'var(--lime)'
+            else if (context) fill = 'var(--faint)'
             else if (node.level === 0) fill = domainColor(node.id, 60, 74)
             else fill = style.fill
 
             // Emphasis is carried by hue and weight, not by fading text out.
             // Every label that is drawn stays legible; only filtered-out ones
             // are allowed to recede.
-            const fontWeight =
-              node.level === 0
+            const fontWeight = context
+              ? 500
+              : node.level === 0
                 ? 650
-                : tier === 0
-                  ? 420 + Math.round(label.weight * 180) + (style.emphasis >= 0.85 ? 40 : 0)
-                  : 400
-            let opacity = (tier === 0 ? 1 : tier === 1 ? 0.94 : 0.76) * (0.88 + style.emphasis * 0.12)
-            if (node.level === 0 || selected) opacity = 1
+                : 420 + Math.round(label.weight * 180) + (style.emphasis >= 0.85 ? 40 : 0)
+            let opacity = context ? 0.5 : 0.88 + style.emphasis * 0.12
+            if (selected) opacity = 1
             if (filtersOn && !isMatch) opacity *= 0.28
 
             const lh = upp * label.font * 1.2
@@ -789,11 +798,11 @@ export function AtlasMap() {
                     dominantBaseline="middle"
                     fontSize={upp * label.font}
                     fontWeight={fontWeight}
-                    letterSpacing={node.level === 0 ? upp * 0.9 : undefined}
+                    letterSpacing={caps ? upp * 0.9 : undefined}
                     fill={fill}
                   >
                     {node.fail && i === 0 ? '↺ ' : ''}
-                    {node.level === 0 ? line.toUpperCase() : line}
+                    {caps ? line.toUpperCase() : line}
                   </text>
                 ))}
                 {label.sub && (
@@ -848,11 +857,14 @@ export function AtlasMap() {
                 elsewhere
               </span>
             </div>
-            <div style={{ color: 'var(--faint)', marginTop: 4 }}>
-              Label size is how much is in a field: activities underneath it, weighted by gap. ↺
-              marks a failure or rework activity. Domain names carry their own colour, everything
-              else is coloured by state. Nothing is drawn between labels, so a group is whatever sits
-              together. Click a label or scroll into it to go deeper.
+            <div style={{ color: 'var(--faint)', marginTop: 6, lineHeight: 1.5 }}>
+              <strong style={{ color: 'var(--dim)' }}>Sentence case with numbers</strong> is what is
+              inside the level you are in. <strong style={{ color: 'var(--dim)' }}>SMALL CAPS</strong>{' '}
+              in grey is a neighbouring branch one step out, shown for bearings only.
+              <br />
+              Size is how much is in a field: activities underneath it, weighted by gap, relative to
+              its siblings. ↺ marks a failure or rework activity. Nothing is drawn between labels, so
+              a group is whatever sits together. Click a label or scroll into it to go deeper.
             </div>
           </div>
         )}
