@@ -31,17 +31,17 @@ const ev = (
 
 export const COVERAGE_EVENTS: CoverageEvent[] = [
   // --- public: the saturated middle of the map -----------------------------
-  ev('d01.prep.knife-work', 'epic', 'EPIC-KITCHENS-100', 1400, '2026-01-01', 'public', ['ego', 'video', 'language']),
-  ev('d01.prep.knife-work.julienne-onion', 'epic', 'EPIC-KITCHENS-100', 210, '2026-01-01', 'public', ['ego', 'video']),
-  ev('d01.cooking.pan-work', 'epic', 'EPIC-KITCHENS-100', 980, '2026-01-01', 'public', ['ego', 'video', 'language']),
-  ev('d01.cleanup.hand-wash', 'epic', 'EPIC-KITCHENS-100', 320, '2026-01-01', 'public', ['ego', 'video']),
+  ev('d01.knife.cutting', 'epic', 'EPIC-KITCHENS-100', 1400, '2026-01-01', 'public', ['ego', 'video', 'language']),
+  ev('d01.knife.cutting.julienne-last-piece-on-a-holder', 'epic', 'EPIC-KITCHENS-100', 210, '2026-01-01', 'public', ['ego', 'video']),
+  ev('d01.stove.cooking-motions', 'epic', 'EPIC-KITCHENS-100', 980, '2026-01-01', 'public', ['ego', 'video', 'language']),
+  ev('d01.dishes-cleaning.washing-up', 'epic', 'EPIC-KITCHENS-100', 320, '2026-01-01', 'public', ['ego', 'video']),
   ev('d01.prep', 'ego4d', 'Ego4D', 2200, '2026-01-01', 'public', ['ego', 'video', 'language']),
   ev('d02.tidy', 'ego4d', 'Ego4D', 1600, '2026-01-01', 'public', ['ego', 'video']),
   ev('d02.laundry.folding.fold-t-shirt', 'oxe', 'Open X-Embodiment', 140, '2026-01-01', 'public', ['video', 'kinematics']),
   ev('d18.instruments', 'egoexo4d', 'Ego-Exo4D', 260, '2026-02-01', 'public', ['ego', 'video', 'language']),
   ev('d18.board-cycle.bike-skills.fix-a-puncture', 'egoexo4d', 'Ego-Exo4D', 90, '2026-02-01', 'public', ['ego', 'video', 'language']),
   ev('d18.climbing.climb-movement', 'egoexo4d', 'Ego-Exo4D', 120, '2026-02-01', 'public', ['ego', 'video']),
-  ev('d01.prep.knife-work', 'egoexo4d', 'Ego-Exo4D', 180, '2026-02-01', 'public', ['ego', 'video', 'language']),
+  ev('d01.knife.cutting', 'egoexo4d', 'Ego-Exo4D', 180, '2026-02-01', 'public', ['ego', 'video', 'language']),
   ev('d17.pick-pack', 'oxe', 'Open X-Embodiment', 900, '2026-01-01', 'public', ['video', 'kinematics']),
   ev('d17.pick-pack.pack-and-induct', 'droid', 'DROID', 420, '2026-01-01', 'public', ['video', 'kinematics']),
   ev('d10.subassembly.kitting.pick-to-kit-tray', 'oxe', 'Open X-Embodiment', 260, '2026-01-01', 'public', ['video', 'kinematics']),
