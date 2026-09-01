@@ -788,10 +788,13 @@ export function AtlasMap() {
                     )
                     return
                   }
-                  // Clicking the title inspects the group you are already in
-                  // rather than moving anywhere.
-                  if (title) setSelected(node.id)
-                  else enter(node)
+                  // The title is the way back out. Clicking the group you are
+                  // standing in has only one sensible meaning, and it is the
+                  // same gesture that got you in, reversed.
+                  if (title) {
+                    setSelected(node.id)
+                    setFocus(node.parentId)
+                  } else enter(node)
                 }}
               >
                 {/* The glyphs themselves are a terrible hit target: only the
@@ -889,7 +892,8 @@ export function AtlasMap() {
       </div>
 
       <div className="overlay hint">
-        scroll to go deeper · drag pan · click enter · esc up · shift-drag lasso · / search
+        scroll to go deeper · click a label to enter · click the title or esc to go back · drag pan ·
+        shift-drag lasso · / search
       </div>
 
       {lassoIds.length > 0 && (
