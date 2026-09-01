@@ -11,6 +11,10 @@ A zoomable map of human physical activity, built to answer one operational quest
 - **Coverage** — the Monday morning screen. Every terminal node, sorted by gap score.
 - **Collect** — what a suit can walk in and record tomorrow, and what needs somebody
   else to open a door.
+- **Protocols** — capture session scripts, kept deliberately separate from the
+  taxonomy. A protocol has calibration poses, restart rules, repetitions and
+  labelled contrast trials, none of which are activities anybody performs for a
+  reason.
 - **Catalog** — the whole seed, flat, with primitives and collector biases.
 
 ## The model
@@ -56,6 +60,24 @@ Coverage rows for public datasets (Ego4D, EPIC-KITCHENS, Ego-Exo4D, Open X-Embod
 DROID, AgiBot World) are editorial estimates of where those corpora land in this
 taxonomy, not counts pulled from the papers. They are the first thing that should be
 replaced by a real dataset registry.
+
+## Protocols are not taxonomy
+
+An atlas leaf is a thing somebody does for a reason, with a condition that says it is
+finished. A capture protocol is the ordered script for a recording session. They are
+related and they are not the same document.
+
+The distinction matters because collapsing them corrupts the map. A hundred-step
+movement battery pasted into the tree would have the atlas report a hundred activities
+in body skill, when what it really contains is one: run a movement battery in a suit.
+The gap score would then rank the most saturated area of public motion data as a top
+opportunity, purely because somebody wrote a hundred rows about it.
+
+Protocols live in `content/protocols/` with their own model (`lib/protocol.ts`), and
+carry the things a session needs and a taxonomy must not have: restart conditions,
+deliberately incorrect contrast trials, calibration poses and sensor removal order.
+Steps can link to atlas nodes they exercise, so the two artifacts stay connected
+without being merged.
 
 ## Adding content
 

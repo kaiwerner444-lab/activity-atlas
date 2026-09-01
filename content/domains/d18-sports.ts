@@ -68,6 +68,34 @@ export const d18: NodeSpec = node(
         leaf('handstand-hold', 'Hold and correct a handstand', 'Continuous balance correction through the hands.', { skillYears: 'years' }),
       ]),
     ]),
+    node('loaded-carry', 'Loaded and asymmetric carrying', 'Walking under a load that is not balanced, which is common in real work and thin in public motion data.', { dexterity: 2, contact: 5, horizon: 'medium', skillYears: 'months', robotNow: 'no', saturation: 'empty', suit: 'excellent', prev: 'ubiquitous', prim: ['locomote', 'bimanual'], notes: 'Public motion capture is dense on gait, squats and balance and thin on gait under an asymmetric load. This family is the part of a movement battery that is actually uncovered.' }, [
+      node('carries', 'Carry under load', 'Gait with the load distribution changed.', {}, [
+        leaf('suitcase-carry-no-lean', 'Carry a load on one side without leaning', 'Walk with weight in one hand only.', { cue: 'The spine stays vertical and you do not lean away from the load.', contact: 5 }),
+        leaf('farmer-carry-set-down-on-a-count', 'Carry a load in both hands and set both down together', 'Walk with balanced weight and land it.', { cue: 'Both loads reach the floor on a count rather than being dropped.' }),
+        leaf('front-rack-carry-elbows-up', 'Carry a load at the chest with the elbows up', 'Walk with the load in front of the body.', { cue: 'The elbows stay up and the ribs stay down for the full distance.' }),
+        leaf('overhead-carry-ribs-down', 'Carry a light load overhead', 'Walk with a load above the head.', { cue: 'Arms stay locked, ribs stay down, and it is lowered on a count.', dexterity: 3 }),
+        leaf('walk-loaded-without-shoulder-hike', 'Walk a distance with a load in one hand', 'Cover ground with an asymmetric load.', { cue: 'The opposite shoulder does not hike through the whole distance.' }),
+        leaf('recover-load-shifted-mid-carry', 'Recover: load slipping part-way through a carry', 'Set it down deliberately rather than regripping while walking.', { fail: true }),
+      ]),
+      node('drags-and-pushes', 'Push and drag a resisted load', 'Sustained horizontal force against a load that does not lift.', { contact: 5, dexterity: 2, prev: 'common' }, [
+        leaf('push-sled-constant-lean', 'Push a resisted load at a constant lean', 'Drive a sled or a heavy object forward.', { cue: 'The lean angle holds for the whole distance without a sprint finish.' }),
+        leaf('drag-strap-off-the-legs', 'Drag a resisted load on a strap', 'Pull a load behind you.', { cue: 'The strap stays clear of the backs of the legs the whole way.' }),
+        leaf('recover-sled-stalled-mid-push', 'Recover: load stalled part-way through a push', 'Reset the lean and restart rather than jerking it into motion.', { fail: true }),
+      ]),
+    ]),
+
+    node('reaction', 'Externally cued movement', 'Moving on somebody else’s signal rather than your own timing.', { dexterity: 3, contact: 3, horizon: 'short', skillYears: 'months', robotNow: 'no', saturation: 'empty', prim: ['locomote', 'inspect', 'language'], prev: 'common', notes: 'Self-paced movement is well covered by public data. Movement initiated by an external cue, where the reaction is the measured thing, is not.' }, [
+      node('cued-response', 'Respond to a cue', 'The gap between the signal and the first committed step.', {}, [
+        leaf('change-direction-on-a-signal', 'Change direction on an external signal', 'React to a whistle or a call and commit.', { cue: 'The first step is the intended line, not a stutter step while you decide.' }),
+        leaf('catch-and-absorb-ready-again', 'Catch a moving object and absorb it', 'Receive and control a thrown object.', { cue: 'You could throw again without resetting the feet twice.', contact: 4 }),
+        leaf('recover-false-start-on-a-cue', 'Recover: moved before the signal', 'Reset to the start position rather than carrying the early movement through.', { fail: true }),
+      ]),
+      node('contrast-trials', 'Deliberately incorrect trials', 'Performing a known-bad pattern on purpose, as a labelled negative example.', { ethics: 'restricted', saturation: 'empty', robotNow: 'no', notes: 'Negative examples are rare and valuable, and they are also the one place a capture protocol asks somebody to do the wrong thing on purpose. Kept restricted so a load and a supervisor are always specified.' }, [
+        leaf('perform-a-labelled-bad-pattern', 'Perform a known-bad movement as a labelled trial', 'Demonstrate the incorrect version of a pattern deliberately, once.', { cue: 'One repetition, clearly labelled, and it stops there rather than becoming the working pattern.', contact: 5 }),
+        leaf('recover-contrast-trial-drifting-into-habit', 'Recover: contrast pattern appearing in working trials', 'Stop the session and re-establish the correct pattern before continuing.', { fail: true }),
+      ]),
+    ]),
+
     node('board-cycle', 'Board and cycle sports', 'Balance on a moving platform.', { dexterity: 2, contact: 4, prev: 'common', suit: 'excellent', saturation: 'thin' }, [
       node('bike-skills', 'Ride and fix a bike', 'Riding plus the mechanical side.', {}, [
         leaf('track-stand', 'Hold a track stand', 'Continuous micro-correction at zero speed.', { skillYears: 'months' }),
