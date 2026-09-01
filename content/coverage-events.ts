@@ -42,10 +42,10 @@ export const COVERAGE_EVENTS: CoverageEvent[] = [
   ev('d18.board-cycle.bike-skills.fix-a-puncture', 'egoexo4d', 'Ego-Exo4D', 90, '2026-02-01', 'public', ['ego', 'video', 'language']),
   ev('d18.climbing.climb-movement', 'egoexo4d', 'Ego-Exo4D', 120, '2026-02-01', 'public', ['ego', 'video']),
   ev('d01.prep.knife-work', 'egoexo4d', 'Ego-Exo4D', 180, '2026-02-01', 'public', ['ego', 'video', 'language']),
-  ev('d05.picking.each-pick.pick-from-tote', 'oxe', 'Open X-Embodiment', 900, '2026-01-01', 'public', ['video', 'kinematics']),
-  ev('d05.picking.each-pick', 'droid', 'DROID', 420, '2026-01-01', 'public', ['video', 'kinematics']),
+  ev('d17.pick-pack', 'oxe', 'Open X-Embodiment', 900, '2026-01-01', 'public', ['video', 'kinematics']),
+  ev('d17.pick-pack.pack-and-induct', 'droid', 'DROID', 420, '2026-01-01', 'public', ['video', 'kinematics']),
   ev('d10.subassembly.kitting.pick-to-kit-tray', 'oxe', 'Open X-Embodiment', 260, '2026-01-01', 'public', ['video', 'kinematics']),
-  ev('d05.shopfloor.replenish', 'agibot', 'AgiBot World', 310, '2026-03-01', 'public', ['video', 'kinematics']),
+  ev('d05.shelf-work.facing', 'agibot', 'AgiBot World', 310, '2026-03-01', 'public', ['video', 'kinematics']),
   ev('d02.laundry.washing', 'agibot', 'AgiBot World', 180, '2026-03-01', 'public', ['video', 'kinematics']),
   ev('d16.floor-care.machine-floor', 'agibot', 'AgiBot World', 95, '2026-03-01', 'public', ['video', 'kinematics']),
 
