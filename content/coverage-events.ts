@@ -63,7 +63,7 @@ export const COVERAGE_EVENTS: CoverageEvent[] = [
   ev('d11.test.continuity.mate-test-adapter', 'us', 'Cell A production', 24, '2026-07-30', 'us', ['ego', 'video']),
   ev('d10.fastening.start-thread.finger-start-bolt', 'us', 'Bench pilot', 37, '2026-04-02', 'us', ['ego', 'kinematics', 'force', 'tactile', 'video']),
   ev('d10.fastening.torque.torque-to-spec', 'us', 'Bench pilot', 22, '2026-04-02', 'us', ['ego', 'kinematics', 'force', 'video']),
-  ev('d09.panel-build.panel-terminations.ferrule-and-land', 'us', 'Panel shop pilot', 29, '2026-08-12', 'us', ['ego', 'kinematics', 'force', 'video']),
+  ev('d09.rail.ferrules.land-a-ferrule-until-the-conductor-vanishes', 'us', 'Panel shop pilot', 29, '2026-08-12', 'us', ['ego', 'kinematics', 'force', 'video']),
   ev('d19.teach-demonstrate.demonstrate.narrate-while-doing', 'us', 'Narration pass', 14, '2026-08-12', 'us', ['ego', 'video', 'language']),
 
   // --- partner: one plant, one product family, IP hot -----------------------
