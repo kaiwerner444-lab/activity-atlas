@@ -13,7 +13,7 @@ import {
 } from '@/lib/camera'
 import { LAYOUT, WORLD_FRAME, WORLD_RADIUS, frameHeight, type NodePoint } from '@/lib/layout'
 import { ATLAS, ancestors, getNode, kinNodes } from '@/lib/taxonomy'
-import { nodeStyle, domainColor, HIGHLIGHT_MODES } from '@/lib/colors'
+import { nodeStyle, domainColor, HIGHLIGHT_MODES, ALWAYS_SWATCHES } from '@/lib/colors'
 import { collectorsOn } from '@/lib/filters'
 import { PREVALENCE_WEIGHT } from '@/lib/scoring'
 import { useAtlas } from '@/lib/store'
@@ -875,27 +875,94 @@ export function AtlasMap() {
         </button>
         {legendOpen && (
           <div style={{ marginTop: 8 }}>
-            <div style={{ color: 'var(--dim)', marginBottom: 5 }}>{activeMode.legend}</div>
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <span className="legend-row">
-                <i className="swatch" style={{ background: 'var(--ours)' }} /> ours
-              </span>
-              <span className="legend-row">
-                <i className="swatch" style={{ background: 'var(--public)' }} /> public
-              </span>
-              <span className="legend-row">
-                <i className="swatch" style={{ background: 'rgb(200, 207, 223)' }} /> covered
-                elsewhere
-              </span>
+            <div className="legend-head">Colour by {activeMode.label.toLowerCase()}</div>
+            <div style={{ color: 'var(--dim)', marginBottom: 7 }}>{activeMode.legend}</div>
+            <table className="legend-table">
+              <tbody>
+                {activeMode.swatches.map((sw) => (
+                  <tr key={sw.means}>
+                    <td>
+                      <i
+                        className="swatch"
+                        style={{ background: sw.fill, opacity: sw.emphasis ?? 1 }}
+                      />
+                    </td>
+                    <td className="legend-means">{sw.means}</td>
+                    <td className="legend-test">{sw.test}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="legend-head" style={{ marginTop: 10 }}>
+              In every mode
             </div>
-            <div style={{ color: 'var(--faint)', marginTop: 6, lineHeight: 1.5 }}>
-              <strong style={{ color: 'var(--dim)' }}>Sentence case with numbers</strong> is what is
-              inside the level you are in. <strong style={{ color: 'var(--dim)' }}>SMALL CAPS</strong>{' '}
-              in grey is a neighbouring branch one step out, shown for bearings only.
-              <br />
-              Size is how much is in a field: activities underneath it, weighted by gap, relative to
-              its siblings. ↺ marks a failure or rework activity. Nothing is drawn between labels, so
-              a group is whatever sits together. Click a label or scroll into it to go deeper.
+            <table className="legend-table">
+              <tbody>
+                {ALWAYS_SWATCHES.map((sw) => (
+                  <tr key={sw.means}>
+                    <td>
+                      <i
+                        className="swatch"
+                        style={{ background: sw.fill, opacity: sw.emphasis ?? 1 }}
+                      />
+                    </td>
+                    <td className="legend-means">{sw.means}</td>
+                    <td className="legend-test">{sw.test}</td>
+                  </tr>
+                ))}
+                <tr>
+                  <td>
+                    <i
+                      className="swatch"
+                      style={{
+                        background: `linear-gradient(90deg, ${domainColor('d01', 60, 74)}, ${domainColor('d08', 60, 74)}, ${domainColor('d15', 60, 74)})`,
+                      }}
+                    />
+                  </td>
+                  <td className="legend-means">Domain hue</td>
+                  <td className="legend-test">
+                    one fixed hue per domain, on its own name and on the focus title
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="legend-head" style={{ marginTop: 10 }}>
+              Everything that is not colour
+            </div>
+            <table className="legend-table">
+              <tbody>
+                <tr>
+                  <td className="legend-means" colSpan={2}>
+                    Sentence case, with numbers
+                  </td>
+                  <td className="legend-test">what is inside the level you are in</td>
+                </tr>
+                <tr>
+                  <td className="legend-means" colSpan={2}>
+                    SMALL CAPS in grey
+                  </td>
+                  <td className="legend-test">
+                    a neighbouring branch one step out, for bearings only
+                  </td>
+                </tr>
+                <tr>
+                  <td className="legend-means" colSpan={2}>
+                    Label size
+                  </td>
+                  <td className="legend-test">
+                    activities underneath it, weighted by gap, as a share of the largest sibling
+                  </td>
+                </tr>
+                <tr>
+                  <td className="legend-means" colSpan={2}>
+                    ↺
+                  </td>
+                  <td className="legend-test">a failure or rework activity</td>
+                </tr>
+              </tbody>
+            </table>
+            <div style={{ color: 'var(--faint)', marginTop: 7, lineHeight: 1.5 }}>
+              Nothing is drawn between labels, so a group is whatever sits together.
             </div>
           </div>
         )}

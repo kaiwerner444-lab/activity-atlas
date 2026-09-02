@@ -121,6 +121,41 @@ State lives in the URL, so a slice survives being pasted into an email:
 `path` is the focused node, `sel` the selected node, `facets` the filter set, `hl` the
 colour mode, `t` the coverage timeline cutoff.
 
+## What the colours mean
+
+The key is generated from the same constants `nodeStyle()` paints with
+(`lib/colors.ts`), so it cannot drift from the map. Open it with **Key** at the bottom
+left; it re-renders for whichever mode is selected under **Colour by**.
+
+The default mode is Coverage, which answers: do we hold this, does the industry, or does
+nobody.
+
+| Colour | Means | Test |
+| --- | --- | --- |
+| Aqua | We hold hours here | `ourHours > 0`, or coverage is pilot or production |
+| Coral | Nobody holds it | no hours of ours, and public saturation is `empty` |
+| Light grey | Public data is thin | saturation is `thin` |
+| Dim grey | The industry already has it | saturation is `heavy`, the boring case |
+
+Coral is deliberately the loud colour. Heavy public coverage is the least interesting
+state on the map and recedes to the quiet end of the scale, which is quiet because it is
+neutral rather than because it is nearly invisible: an unreadable label carries no
+information at all.
+
+Three rules hold in every mode. `ethics: prohibited` paints rose and overrides the
+switch entirely. White is the node you selected and the branch you are inside. Lime is
+whatever the lasso is currently holding. Alongside those, every root domain owns one
+fixed hue, spread by golden angle so neighbours on the canvas are far apart on the
+wheel, used on its own name and on the focus title.
+
+The other five modes (gap score, suit fitness, contact richness, partner gate, selected
+players) each carry their own swatch list in `HIGHLIGHT_MODES`.
+
+Colour is one channel of three. Size is a separate encoding: activities underneath a
+label, weighted by gap, as a share of the largest sibling on screen. Typography is the
+third: sentence case with numbers is inside the level you are in, small grey caps is a
+neighbouring branch one step out, shown for bearings only.
+
 ## Navigation
 
 Scroll to go deeper, or click a label. Both do the same thing: enter the group. Esc or

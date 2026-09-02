@@ -376,14 +376,20 @@ body {
 .legend {
   bottom: 12px;
   left: 14px;
-  max-width: 320px;
   font-size: 11px;
-  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 9px 11px;
-  backdrop-filter: blur(3px);
+  backdrop-filter: blur(4px);
+  /* Collapsed it is a button; open it is a reference table, so it has to be
+     wide enough for the rule and short enough to leave the map visible. */
   max-width: 330px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+}
+.legend:has(.legend-table) {
+  max-width: 460px;
 }
 .legend-row {
   display: flex;
@@ -392,7 +398,37 @@ body {
   color: var(--dim);
   font-size: 11px;
 }
+.legend-head {
+  color: var(--fg);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.legend-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.legend-table td {
+  padding: 2.5px 0;
+  vertical-align: top;
+  line-height: 1.45;
+}
+.legend-table td:first-child {
+  width: 18px;
+  padding-top: 5px;
+}
+.legend-means {
+  color: var(--dim);
+  padding-right: 12px !important;
+  white-space: nowrap;
+}
+.legend-test {
+  color: var(--faint);
+  width: 100%;
+}
 .swatch {
+  display: inline-block;
   width: 11px;
   height: 11px;
   border-radius: 3px;
